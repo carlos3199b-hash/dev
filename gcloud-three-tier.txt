@@ -1,0 +1,279 @@
+Creat 3 Tier Application
+
+Step 1
+# Set these variables (replace with your actual project ID)
+export PROJECT_ID="your-project-id"
+export REGION="us-central1"
+export ZONE="us-central1-a"
+
+# Set default project
+gcloud config set project $PROJECT_ID
+gcloud config set compute/region $REGION
+gcloud config set compute/zone $ZONE
+
+Step 2
+# Create custom VPC
+gcloud compute networks create three-tier-vpc \
+  --subnet-mode=custom \
+  --bgp-routing-mode=regional
+
+# Create web tier subnet (public-facing)
+gcloud compute networks subnets create web-subnet \
+  --network=three-tier-vpc \
+  --region=$REGION \
+  --range=10.1.0.0/24
+
+# Create database tier subnet (private)
+gcloud compute networks subnets create db-subnet \
+  --network=three-tier-vpc \
+  --region=$REGION \
+  --range=10.2.0.0/24 \
+  --enable-private-ip-google-access
+
+# Verify networks created
+gcloud compute networks list
+gcloud compute networks subnets list --network=three-tier-vpc
+
+
+Step 3
+# Allow HTTP/HTTPS from internet to web tier
+gcloud compute firewall-rules create allow-http-https \
+  --network=three-tier-vpc \
+  --allow=tcp:80,tcp:443 \
+  --source-ranges=0.0.0.0/0 \
+  --target-tags=web-server \
+  --description="Allow HTTP and HTTPS traffic to web servers"
+
+# Allow SSH for management (restrict source-ranges in production!)
+gcloud compute firewall-rules create allow-ssh \
+  --network=three-tier-vpc \
+  --allow=tcp:22 \
+  --source-ranges=0.0.0.0/0 \
+  --description="Allow SSH for management"
+
+# Allow health check traffic from Google's health checkers
+gcloud compute firewall-rules create allow-health-check \
+  --network=three-tier-vpc \
+  --allow=tcp \
+  --source-ranges=35.191.0.0/16,130.211.0.0/22 \
+  --target-tags=web-server \
+  --description="Allow health checks from Google Cloud"
+
+# Allow web tier to communicate with database tier
+gcloud compute firewall-rules create allow-web-to-db \
+  --network=three-tier-vpc \
+  --allow=tcp:3306 \
+  --source-tags=web-server \
+  --target-tags=database \
+  --description="Allow web tier to access database"
+
+# Verify firewall rules
+gcloud compute firewall-rules list --filter="network:three-tier-vpc"
+
+
+Step 4***
+# Create Cloud SQL instance with private IP
+gcloud sql instances create three-tier-db \
+  --database-version=MYSQL_8_0 \
+  --tier=db-f1-micro \
+  --region=$REGION \
+  --network=projects/$PROJECT_ID/global/networks/three-tier-vpc \
+  --no-assign-ip \
+  --root-password=SecurePassword123!
+
+# Create a database
+gcloud sql databases create webapp_db --instance=three-tier-db
+
+# Create database user
+gcloud sql users create webapp_user \
+  --instance=three-tier-db \
+  --password=UserPassword123!
+
+# Get the private IP of Cloud SQL (you'll need this later)
+gcloud sql instances describe three-tier-db --format="value(ipAddresses[0].ipAddress)"
+
+Step 5
+# Create startup script for web servers
+cat > startup-script.sh <<'EOF'
+#!/bin/bash
+apt-get update
+apt-get install -y apache2 php php-mysql
+
+# Create a simple PHP page
+cat > /var/www/html/index.php <<'PHPEOF'
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Three-Tier App</title>
+</head>
+<body>
+    <h1>Three-Tier Web Application</h1>
+    <p>Server: <?php echo gethostname(); ?></p>
+    <p>Region: <?php echo $_SERVER['SERVER_ADDR']; ?></p>
+    <p>Database connection: 
+    <?php
+        $db_host = getenv('DB_HOST');
+        $db_user = 'webapp_user';
+        $db_pass = 'UserPassword123!';
+        $db_name = 'webapp_db';
+        
+        $conn = mysqli_connect($db_host, $db_user, $db_pass, $db_name);
+        if ($conn) {
+            echo "✅ Connected to database!";
+            mysqli_close($conn);
+        } else {
+            echo "❌ Database connection failed: " . mysqli_connect_error();
+        }
+    ?>
+    </p>
+</body>
+</html>
+PHPEOF
+
+systemctl restart apache2
+EOF
+
+# Get the database private IP (replace DB_PRIVATE_IP with actual IP from step 4)
+DB_IP=$(gcloud sql instances describe three-tier-db --format="value(ipAddresses[0].ipAddress)")
+
+# Create instance template
+gcloud compute instance-templates create web-server-template \
+  --machine-type=e2-micro \
+  --network-interface=subnet=web-subnet,no-address \
+  --tags=web-server \
+  --metadata=startup-script="$(cat startup-script.sh)",DB_HOST=$DB_IP \
+  --image-family=debian-11 \
+  --image-project=debian-cloud \
+  --boot-disk-size=10GB
+
+# Verify template
+gcloud compute instance-templates describe web-server-template
+
+Step 6
+# Create managed instance group
+gcloud compute instance-groups managed create web-server-group \
+  --base-instance-name=web-server \
+  --template=web-server-template \
+  --size=2 \
+  --zone=$ZONE
+
+# Configure autoscaling
+gcloud compute instance-groups managed set-autoscaling web-server-group \
+  --zone=$ZONE \
+  --max-num-replicas=5 \
+  --min-num-replicas=2 \
+  --target-cpu-utilization=0.6 \
+  --cool-down-period=90
+
+# Set named port for load balancer
+gcloud compute instance-groups managed set-named-ports web-server-group \
+  --zone=$ZONE \
+  --named-ports=http:80
+
+# Verify instance group
+gcloud compute instance-groups managed list
+gcloud compute instances list
+
+
+Step 7
+# Create HTTP health check
+gcloud compute health-checks create http web-health-check \
+  --port=80 \
+  --request-path=/ \
+  --check-interval=10s \
+  --timeout=5s \
+  --healthy-threshold=2 \
+  --unhealthy-threshold=3
+
+# Verify health check
+gcloud compute health-checks describe web-health-check
+
+
+Step 8
+# Create backend service
+gcloud compute backend-services create web-backend-service \
+  --protocol=HTTP \
+  --health-checks=web-health-check \
+  --global \
+  --port-name=http
+
+# Add instance group to backend service
+gcloud compute backend-services add-backend web-backend-service \
+  --instance-group=web-server-group \
+  --instance-group-zone=$ZONE \
+  --global \
+  --balancing-mode=UTILIZATION \
+  --max-utilization=0.8
+
+# Verify backend service
+gcloud compute backend-services describe web-backend-service --global
+
+
+Step 9
+# Create URL map
+gcloud compute url-maps create web-url-map \
+  --default-service=web-backend-service
+
+# Create target HTTP proxy
+gcloud compute target-http-proxies create web-http-proxy \
+  --url-map=web-url-map
+
+# Verify
+gcloud compute url-maps describe web-url-map
+
+
+Step 10
+# Reserve static external IP
+gcloud compute addresses create web-app-ip \
+  --ip-version=IPV4 \
+  --global
+
+# Get the IP address
+gcloud compute addresses describe web-app-ip --global --format="value(address)"
+
+# Create forwarding rule
+gcloud compute forwarding-rules create web-forwarding-rule \
+  --address=web-app-ip \
+  --global \
+  --target-http-proxy=web-http-proxy \
+  --ports=80
+
+# Verify
+gcloud compute forwarding-rules describe web-forwarding-rule --global
+
+
+Step 11 - Test the app
+# Get the external IP
+EXTERNAL_IP=$(gcloud compute addresses describe web-app-ip --global --format="value(address)")
+
+echo "Your application is available at: http://$EXTERNAL_IP"
+echo "Wait 5-10 minutes for everything to initialize, then test with:"
+echo "curl http://$EXTERNAL_IP"
+
+
+Step 12 - Verify
+# Check instance group health
+gcloud compute instance-groups managed list-instances web-server-group --zone=$ZONE
+
+# Check backend service health
+gcloud compute backend-services get-health web-backend-service --global
+
+# View logs from instances
+gcloud compute instances list --filter="name:web-server*"
+
+
+Step Final - CLEANUP
+# Delete in reverse order to avoid dependency issues
+gcloud compute forwarding-rules delete web-forwarding-rule --global --quiet
+gcloud compute target-http-proxies delete web-http-proxy --quiet
+gcloud compute url-maps delete web-url-map --quiet
+gcloud compute backend-services delete web-backend-service --global --quiet
+gcloud compute health-checks delete web-health-check --quiet
+gcloud compute instance-groups managed delete web-server-group --zone=$ZONE --quiet
+gcloud compute instance-templates delete web-server-template --quiet
+gcloud sql instances delete three-tier-db --quiet
+gcloud compute addresses delete web-app-ip --global --quiet
+gcloud compute firewall-rules delete allow-http-https allow-ssh allow-health-check allow-web-to-db --quiet
+gcloud compute networks subnets delete web-subnet db-subnet --region=$REGION --quiet
+gcloud compute networks delete three-tier-vpc --quiet
+
