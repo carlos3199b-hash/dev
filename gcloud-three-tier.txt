@@ -71,7 +71,7 @@ gcloud compute firewall-rules create allow-web-to-db \
 gcloud compute firewall-rules list --filter="network:three-tier-vpc"
 
 
-Step 4***
+Step 4 ****
 # Create Cloud SQL instance with private IP
 gcloud sql instances create three-tier-db \
   --database-version=MYSQL_8_0 \
