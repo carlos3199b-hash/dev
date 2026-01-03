@@ -72,6 +72,25 @@ gcloud compute firewall-rules list --filter="network:three-tier-vpc"
 
 
 Step 4 ****
+gcloud services enable servicenetworking.googleapis.com --project=gen-lang-client-0006306294
+
+gcloud compute addresses create google-managed-services-three-tier-vpc \
+  --global \
+  --purpose=VPC_PEERING \
+  --prefix-length=16 \
+  --network=three-tier-vpc \
+  --project=gen-lang-client-0006306294
+
+gcloud services vpc-peerings connect \
+  --service=servicenetworking.googleapis.com \
+  --ranges=google-managed-services-three-tier-vpc \
+  --network=three-tier-vpc \
+  --project=gen-lang-client-0006306294
+
+gcloud services vpc-peerings list \
+  --network=three-tier-vpc \
+  --project=gen-lang-client-0006306294
+
 # Create Cloud SQL instance with private IP
 gcloud sql instances create three-tier-db \
   --database-version=MYSQL_8_0 \
