@@ -71,7 +71,7 @@ gcloud compute firewall-rules create allow-web-to-db \
 gcloud compute firewall-rules list --filter="network:three-tier-vpc"
 
 
-Step 4 ****
+Step 4 
 gcloud services enable servicenetworking.googleapis.com --project=gen-lang-client-0006306294
 
 gcloud compute addresses create google-managed-services-three-tier-vpc \
@@ -131,17 +131,17 @@ cat > /var/www/html/index.php <<'PHPEOF'
     <p>Region: <?php echo $_SERVER['SERVER_ADDR']; ?></p>
     <p>Database connection: 
     <?php
-        $db_host = getenv('DB_HOST');
-        $db_user = 'webapp_user';
-        $db_pass = 'UserPassword123!';
-        $db_name = 'webapp_db';
+    $db_host = shell_exec('curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/DB_HOST 2>/dev/null');
+$db_user = shell_exec('curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/DB_USER 2>/dev/null');
+$db_pass = shell_exec('curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/DB_PASS 2>/dev/null');
+$db_name = shell_exec('curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/DB_NAME 2>/dev/null');
         
         $conn = mysqli_connect($db_host, $db_user, $db_pass, $db_name);
         if ($conn) {
-            echo "✅ Connected to database!";
+            echo "Connected to database!";
             mysqli_close($conn);
         } else {
-            echo "❌ Database connection failed: " . mysqli_connect_error();
+            echo "Database connection failed: " . mysqli_connect_error();
         }
     ?>
     </p>
@@ -160,7 +160,7 @@ gcloud compute instance-templates create web-server-template \
   --machine-type=e2-micro \
   --network-interface=subnet=web-subnet,no-address \
   --tags=web-server \
-  --metadata=startup-script="$(cat startup-script.sh)",DB_HOST=$DB_IP \
+  --metadata=startup-script="$(cat startup-script.sh)",DB_HOST=$DB_IP,DB_USER=webapp_user,DB_PASS=UserPassword123!,DB_NAME=webapp_db \
   --image-family=debian-11 \
   --image-project=debian-cloud \
   --boot-disk-size=10GB
@@ -168,7 +168,7 @@ gcloud compute instance-templates create web-server-template \
 # Verify template
 gcloud compute instance-templates describe web-server-template
 
-Step 6
+Step 6 ****
 # Create managed instance group
 gcloud compute instance-groups managed create web-server-group \
   --base-instance-name=web-server \
