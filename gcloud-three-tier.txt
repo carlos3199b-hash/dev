@@ -77,7 +77,7 @@ gcloud sql instances create three-tier-db \
   --database-version=MYSQL_8_0 \
   --tier=db-f1-micro \
   --region=$REGION \
-  --network=projects/$PROJECT_ID/global/networks/three-tier-vpc \
+  --network=projects/gen-lang-client-0006306294/global/networks/three-tier-vpc \
   --no-assign-ip \
   --root-password=SecurePassword123!
 
