@@ -168,7 +168,7 @@ gcloud compute instance-templates create web-server-template \
   --machine-type=e2-micro \
   --network-interface=subnet=web-subnet,no-address \
   --tags=web-server \
-  --metadata=startup-script="$(cat startup-script.sh)",DB_HOST=$DB_IP,DB_USER=webapp_user,DB_PASS=UserPassword123!,DB_NAME=webapp_db \
+  --metadata=startup-script="$(cat startup-script.sh)" \
   --image-family=debian-11 \
   --image-project=debian-cloud \
   --boot-disk-size=10GB
