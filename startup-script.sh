@@ -15,10 +15,11 @@ cat > /var/www/html/index.php <<'PHPEOF'
     <p>Region: <?php echo $_SERVER['SERVER_ADDR']; ?></p>
     <p>Database connection: 
     <?php
-        $db_host = shell_exec('curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/DB_HOST 2>/dev/null');
-$db_user = shell_exec('curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/DB_USER 2>/dev/null');
-$db_pass = shell_exec('curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/DB_PASS 2>/dev/null');
-$db_name = shell_exec('curl -H "Metadata-Flavor: Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/DB_NAME 2>/dev/null');
+    $db_host = '10.105.0.3';
+$db_user = 'webapp_user';
+$db_pass = 'UserPassword123!';
+$db_name = 'webapp_db';
+        
         $conn = mysqli_connect($db_host, $db_user, $db_pass, $db_name);
         if ($conn) {
             echo "Connected to database!";
