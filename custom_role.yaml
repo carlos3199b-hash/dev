@@ -5,4 +5,3 @@ includedPermissions:
   - resourcemanager.projects.get
   - compute.instances.list
   - compute.instances.get
-  
