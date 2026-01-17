@@ -16,9 +16,10 @@ cat > /var/www/html/index.php <<'PHPEOF'
     <p>Database connection: 
     <?php
     $db_host = '10.105.0.3';
-    $db_pass = 'UserPassword123';
+    $db_pass = '';
     $db_user = 'webapp_user';
     $db_name = 'webapp_db';
+
 
      echo "Connected!";
 
