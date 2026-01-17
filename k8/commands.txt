@@ -1,0 +1,54 @@
+# 1. Enable API
+gcloud services enable container.googleapis.com
+
+# 2. Create cluster
+gcloud container clusters create my-web-cluster \
+  --zone us-central1-a \
+  --num-nodes 3 \
+  --machine-type e2-medium
+
+# 3. Get credentials
+gcloud components install gke-gcloud-auth-plugin
+gke-gcloud-auth-plugin --version
+gcloud container clusters get-credentials my-web-cluster --zone us-central1-a
+
+# 4. Verify
+kubectl get nodes
+
+# 5. Create deployment with 3 pods
+kubectl create deployment web-app --image=nginx:latest --replicas=3
+
+# 6. Check pods
+kubectl get pods
+
+# 7. Expose with LoadBalancer
+kubectl expose deployment web-app --type=LoadBalancer --port=80 --target-port=80
+
+# 8. Get external IP (wait for it)
+kubectl get service web-app --watch
+
+# 9. Test (use the IP from step 8)
+curl http://EXTERNAL_IP
+
+##future support then do reauthenticate get-credentials
+Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):
+export USE_GKE_GCLOUD_AUTH_PLUGIN=True
+source ~/.bashrc  # or ~/.zshrc
+
+## other commands
+kubectl rollout history deployment/web-app
+kubectl exec -it POD_NAME -- /bin/bash
+kubectl exec -it POD_NAME -- /bin/sh
+kubectl logs POD_NAME
+kubectl logs -f POD_NAME
+kubectl logs --tail=100 POD_NAME
+kubectl logs POD_NAME --previous
+kubectl scale deployment web-app --replicas=5
+
+## Cleanup
+# Delete the service
+kubectl delete service web-app
+# Delete the deployment
+kubectl delete deployment web-app
+# Delete the cluster (stops all charges)
+gcloud container clusters delete my-web-cluster --zone us-central1-a --quiet
