@@ -1,0 +1,8 @@
+title: "Custom Role Example"
+description: "A sample custom IAM role"
+stage: "GA"
+includedPermissions:
+  - resourcemanager.projects.get
+  - compute.instances.list
+  - compute.instances.get
+  
