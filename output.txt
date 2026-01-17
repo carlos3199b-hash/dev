@@ -1,0 +1,1 @@
+ERROR: (gcloud.projects.add-iam-policy-binding) [carlos3199b@gmail.com] does not have permission to access projects instance [gen-client-lang-0006306294:getIamPolicy] (or it may not exist): The caller does not have permission. This command is authenticated as carlos3199b@gmail.com which is the active account specified by the [core/account] property
