@@ -120,6 +120,17 @@ gcloud sql users create webapp_user \
 gcloud sql instances describe three-tier-db --format="value(ipAddresses[0].ipAddress)"
 
 Step 5
+gcloud compute routers create nat-router \
+  --network=three-tier-vpc \
+  --region=us-central1
+
+# Create Cloud NAT
+gcloud compute routers nats create nat-config \
+  --router=nat-router \
+  --region=us-central1 \
+  --nat-all-subnet-ip-ranges \
+  --auto-allocate-nat-external-ips
+  
 # Create startup script for web servers
 cat > startup-script.sh <<'EOF'
 #!/bin/bash
